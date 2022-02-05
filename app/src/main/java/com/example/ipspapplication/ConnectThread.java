@@ -150,7 +150,8 @@ public class ConnectThread extends Thread {
         Log.d(TAG_CONNECT, "remote device - address: " + dev.getAddress());
 
         try {
-            Method m = dev.getClass().getMethod("createInsecureL2capSocket", new Class[]{int.class}); //Android 8
+            Method m = dev.getClass().getMethod("createInsecureL2capChannel", new Class[]{int.class}); //Android 10
+            //Method m = dev.getClass().getMethod("createInsecureL2capSocket", new Class[]{int.class}); //Android 8
             //Method m = dev.getClass().getMethod("createL2capSocket", new Class[]{int.class}); //Android 7
             Log.d(TAG_CONNECT, "get method createL2capSocket() successfully, type: " + m.getName());
             tmp = (BluetoothSocket) m.invoke(dev, 0x20023);// 0x0023 for IPSP (Android8: 0x20023), 0x20025 (OTP)

@@ -49,11 +49,6 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     private boolean refreshing = false;
     private BluetoothDevice mSelectedDevice;
 
-    private byte[] linkLocalRouterAddress;
-    private byte[] linkLocalPeripheralAddress;
-    private byte[] selectedDeviceAddress;
-    private byte[] selfDeviceAddress;
-
     public ArrayList<ConnectThread> bluetoothConnections;
 
 
@@ -72,48 +67,6 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
             StrictMode.ThreadPolicy policy = new StrictMode.ThreadPolicy.Builder().permitAll().build();
             StrictMode.setThreadPolicy(policy);
-
-            //if readout own device address it can get set manually here (linkLocalRouterAddress is the own address)
-            linkLocalRouterAddress = new byte[16];
-            linkLocalRouterAddress[0] = (byte) 0xfe;
-            linkLocalRouterAddress[1] = (byte) 0x80;
-            linkLocalRouterAddress[2] = (byte) 0x00;
-            linkLocalRouterAddress[3] = (byte) 0x00;
-            linkLocalRouterAddress[4] = (byte) 0x00;
-            linkLocalRouterAddress[5] = (byte) 0x00;
-            linkLocalRouterAddress[6] = (byte) 0x00;
-            linkLocalRouterAddress[7] = (byte) 0x00;
-            linkLocalRouterAddress[8] = (byte) 0x78;
-            linkLocalRouterAddress[9] = (byte) 0xf8;
-            linkLocalRouterAddress[10] = (byte) 0x82;
-            linkLocalRouterAddress[11] = (byte) 0xff;
-            linkLocalRouterAddress[12] = (byte) 0xfe;
-            linkLocalRouterAddress[13] = (byte) 0x52;
-            linkLocalRouterAddress[14] = (byte) 0x5f;
-            linkLocalRouterAddress[15] = (byte) 0x3f;
-
-            //FE80:0000:0000:0000:FE3D:4CFF:FEC1:6E0C
-            linkLocalPeripheralAddress = new byte[16];
-            linkLocalPeripheralAddress[0] = (byte) 0xfe;
-            linkLocalPeripheralAddress[1] = (byte) 0x80;
-            linkLocalPeripheralAddress[2] = (byte) 0x00;
-            linkLocalPeripheralAddress[3] = (byte) 0x00;
-            linkLocalPeripheralAddress[4] = (byte) 0x00;
-            linkLocalPeripheralAddress[5] = (byte) 0x00;
-            linkLocalPeripheralAddress[6] = (byte) 0x00;
-            linkLocalPeripheralAddress[7] = (byte) 0x00;
-
-            //its possible to set manually address of the peripheral device
-            linkLocalPeripheralAddress[8] = (byte) 0xfe;
-            linkLocalPeripheralAddress[9] = (byte) 0x3d;
-            linkLocalPeripheralAddress[10] = (byte) 0x4c;
-            linkLocalPeripheralAddress[11] = (byte) 0xff;
-            linkLocalPeripheralAddress[12] = (byte) 0xfe;
-            linkLocalPeripheralAddress[13] = (byte) 0xc1;
-            linkLocalPeripheralAddress[14] = (byte) 0x6e;
-            linkLocalPeripheralAddress[15] = (byte) 0x0c;
-
-            //--------------------
 
             this.mDeviceList = new ArrayList<>();
             this.mDeviceNameList = new ArrayList<>();
@@ -155,8 +108,6 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             this.mBLEScanner = mBluetoothAdapter.getBluetoothLeScanner();
 
             mReceiver = new BroadcastReceiver() {
-
-
                 public void onReceive(Context context, Intent intent) {
                     String action = intent.getAction();
 
@@ -220,52 +171,36 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
     @Override
     public void onClick(View v) {
-
-        //Try to establish a GATT connection for testing set MTU
-        BluetoothGatt gatt = mSelectedDevice.connectGatt(this, false, gattCallback);
-        //--------------------------------------------------------------
-
         if (v == btnConnect) {
+            ScanCallback scb = new ScanCallback() {};
+            mBLEScanner.stopScan(scb);
+            mBluetoothAdapter.cancelDiscovery(); // we are advised to do so before attempting to connect
+
             if (mDeviceList.size() > 0) {
                 if (mSelectedDevice == null)
                     return;
 
                 Log.d(CONNECT_TAG, "++address of device to connect: " + mSelectedDevice.getAddress());
 
-                try {
-                    selfDeviceAddress = mBluetoothAdapter.getAddress().getBytes("UTF-8");
-                } catch (Exception e) {
-                    Log.e(CONNECT_TAG, "Exception Adapter getAddress().getBytes()", e);
-                }
+                // Try to establish a GATT connection - seems to fix problems with certain android devices
+                BluetoothGatt gatt = mSelectedDevice.connectGatt(this, false, gattCallback);
 
-                String macAddress = android.provider.Settings.Secure.getString(this.getContentResolver(), "bluetooth_address");
-
-                Log.d(CONNECT_TAG, "++own device address from string: " + macAddress);
-                Log.d(CONNECT_TAG, "++own device address from string: " + BluetoothAdapter.getDefaultAdapter().getAddress());
-
-                Log.d(CONNECT_TAG, "own device address from string: " + selfDeviceAddress.toString());
-                Log.d(CONNECT_TAG, "own device address from bytes: " + bytesToHex(selfDeviceAddress));
-
+                byte[] selectedDeviceAddress = new byte[6];
                 //selectedDeviceAddress = mSelectedDevice.getAddress().getBytes("UTF-8");
                 String[] bda = mSelectedDevice.getAddress().split(":");
-                selectedDeviceAddress = new byte[6];
                 for (int i = 0; i < bda.length; i++)
                     selectedDeviceAddress[i] = Integer.decode("0x" + bda[i]).byteValue();
 
                 Log.d(CONNECT_TAG, "selected device address from string: " + mSelectedDevice.getAddress());
-                Log.d(CONNECT_TAG, "selected device address from string: " + selectedDeviceAddress.toString());
                 Log.d(CONNECT_TAG, "selected device address from bytes: " + bytesToHex(selectedDeviceAddress));
-
-                //-------------------------------------------
 
                 ConnectThread connThread = new ConnectThread(this, mSelectedDevice);
                 bluetoothConnections.add(connThread);
                 connThread.start();
-
-            } else
+            } else {
                 Log.e(CONNECT_TAG, "++can't connect to device, mDeviceList is empty!");
+            }
         } else if (v == btnRefresh) {
-
             mDeviceList.clear();
 
             ScanCallback scb = new ScanCallback() {
@@ -295,6 +230,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 this.mBLEScanner.startScan(scb);
             }
             else {
+                refreshing = false;
                 mBLEScanner.stopScan(scb);
             }
         }
@@ -302,7 +238,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
     private boolean existsInDeviceList(BluetoothDevice btDevice) {
         for (BluetoothDevice dev : mDeviceList) {
-            if (dev.getAddress() == btDevice.getAddress())
+            if ( dev.getAddress().equals(btDevice.getAddress()) )
                 return true;
         }
         return false;
@@ -320,5 +256,3 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         return new String(hexChars);
     }
 }
-
-
